@@ -1,0 +1,2 @@
+1. Rename all commits to belong to Beardpuff.
+2. Make default commits to be by user Beardpuff.
