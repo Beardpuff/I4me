@@ -4,13 +4,6 @@
 from bs4 import BeautifulSoup
 import requests
 
-# url = raw_input("Enter a website to extract the URL's from: ")
-# r  = requests.get("http://" +url)
-# data = r.text
-# soup = BeautifulSoup(data)
-# for link in soup.find_all('a'):
-#     print(link.get('href'))
-
 
 class WebsiteDataCollector():
 
@@ -21,76 +14,49 @@ class WebsiteDataCollector():
 
         self.name = name
         self.website = website
-        self.initial_address = initial_address
+        self.crawl_list = [initial_address]
+        self.initial_has_info = None
+        self.parse_links_rules = None
+        self.parse_text_rules = None
+
+        # Params used during crawl.
+        self.current_website = None
+        self.current_has_info = None
+        self.current_depth = None
+
+    def check_ready():
+        assert self.initial_has_info is not None
+        assert self.parse_links_rules is not None
+        assert self.parse_text_rules is not
 
     def crawl(self,
+              depth=0,
               verbose=False):
+        # Crawler function.
+        self.crawl_list = [(self.initial_address, self.initial_has_info, 0)]
 
-        list_rules = [("div", {"class", "list-content"}),
-                      ("div", {"class", "text"}),
-                      ("h4",  {}),
-                      ("a",   {})
-                      ]
-        article_rules = [("span", {"class", "article-content"}),
-                         ("p",    {}),
-                         ("a",    {})
-                         ]
+        # Breath first (search) of websites.
+        while len(self.crawl_list) > 0:
+            if verbose:
+                print('\nCurrent size of crawl_list = {:d}'.format(
+                      len(self.crawl_list)))
+            (current_website, current_has_info,
+                current_depth) = self.crawl_list.pop(0)
 
-        data = requests.get(self.initial_address).text
+            data = requests.get(self.initial_address).text
+            soup = BeautifulSoup(data, 'html.parser')
 
-        # For loop
-        soup_list = [BeautifulSoup(data, 'html.parser')]
-        web_list = []
+            if current_has_info:
+                # If website has information to be parsed extract data.
+                self.extract_text(soup)
+            if current_depth < depth:
+                # If crawl_depth is less that max_depth, append new websites.
+                self.crawl_list += self.extract_links(soup, current_depth)
 
-        self.List_maker(list_rules, soup_list, 0, web_list)
-        if(verbose):
-            for web in web_list:
-                print(web)
+    def extract_text(self):
+        # Parses text from a website.
+        raise NotImplementedError
 
-        article_list = []
-        for web in web_list:
-            current_web = self.website+web
-            article_data = requests.get(current_web).text
-            soup_list = [BeautifulSoup(article_data, 'html.parser')]
-            text = []
-            tickers = []
-            self.Article_parser(article_rules, soup_list, 0, text, tickers)
-
-    def List_maker(self,
-                   rules,
-                   soup_list,
-                   depth,
-                   web_list):
-
-        if(len(rules) > depth):
-            r_now = rules[depth]
-            r1, r2 = r_now
-            for s in soup_list:
-                new_soup = s.findAll(r1, r2)
-                self.List_maker(rules, new_soup, depth+1, web_list)
-        else:
-            s = soup_list[0]
-            web_list.append(s['href'])
-
-    # \todo(vrubies) finish article parser.
-    def Article_parser(self,
-                       rules,
-                       soup_list,
-                       depth,
-                       text,
-                       tickers):
-        if(depth == 1):
-            s = soup_list[0]
-            text.append(s.text)
-        if(depth == 2):
-            s = soup_list[0]
-            tickers.append(s.text)
-        if(len(rules) > depth):
-            r_now = rules[depth]
-            r1, r2 = r_now
-            for s in soup_list:
-                new_soup = s.findAll(r1, r2)
-                self.Article_parser(rules, new_soup, depth+1, article_list)
-        else:
-            s = soup_list[0]
-            article_list.append(s['href'])
+    def extract_links(self):
+        # Parses links from a website.
+        raise NotImplementedError
