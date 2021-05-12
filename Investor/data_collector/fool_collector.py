@@ -4,8 +4,10 @@
 from data_collector_main import WebsiteDataCollector
 
 from bs4 import BeautifulSoup
+import bs4
 import requests
 import html2text as h2t
+import unidecode
 
 # url = raw_input("Enter a website to extract the URL's from: ")
 # r  = requests.get("http://" +url)
@@ -17,10 +19,10 @@ import html2text as h2t
 
 class FoolCollector(WebsiteDataCollector):
 
-    def __init__(self,
-                 name,
-                 website,
-                 initial_address):
+    def __init__(self, name, website, range_idx):
+        initial_address = [
+            "https://www.fool.com/investing-news/?page={:d}".format(
+                ii) for ii in range_idx]
         super(FoolCollector, self).__init__(name, website, initial_address)
 
         self.initial_has_info = False
@@ -29,13 +31,18 @@ class FoolCollector(WebsiteDataCollector):
                              ("a",   {"href": True}),
                              ]}
         self.parse_text_rules = {
-            "author_name":  [("span", {"class": "article-content"}),
+            "author_name":  [("div", {"class": "author-name"}),
+                             ("a",    {})
+                             ],
+            "date":         [("div", {"class": "publication-date"})
+                             ],
+            "tickers":      [("span", {"class": "article-content"}),
                              ("p",    {}),
+                             ("span", {"class": "ticker"}),
                              ("a",    {})
                              ],
             "article_text": [("span", {"class": "article-content"}),
-                             ("p",    {}),
-                             ("a",    {})
+                             ("p",    {})
                              ]}
 
         super(FoolCollector, self).check_ready()
@@ -46,10 +53,11 @@ class FoolCollector(WebsiteDataCollector):
 
         parse_rules = self.parse_links_rules.copy()
         for key in parse_rules:
-            sub_soup = self.rule_popper(soup.copy(), parse_rules[key])
+            info = []
+            self.rule_popper([soup], parse_rules[key], info)
 
             if key is "links":
-                for soup_element in sub_soup:
+                for soup_element in info:
                     next_website = self.website + soup_element['href']
                     has_info = True
                     web_links.append((next_website, has_info, depth+1))
@@ -58,97 +66,135 @@ class FoolCollector(WebsiteDataCollector):
 
     def extract_text(self, soup):
         # Text extractor for Motley Fool.
+        all_info = {}
+
+        h = h2t.HTML2Text()
+        h.ignore_links = True
+        h.ignore_images = True
 
         parse_rules = self.parse_text_rules.copy()
         for key in parse_rules:
-            sub_soup = self.rule_popper(soup.copy(), parse_rules[key])
+            info = []
+            self.rule_popper([soup], parse_rules[key], info)
 
             if key is "author_name":
-
+                author_name = []
+                for name in info:
+                    name_text = self.clean_text(h.handle(str(name)))
+                    for single_author in name_text.split(","):
+                        single_author = single_author.replace(
+                            "and ", "").replace(" and", "").replace(
+                            " and ", "")
+                        author_name.append(self.clean_text(
+                            single_author).replace(" ", "_"))
+                all_info[key] = author_name
+            if key is "date":
+                date_text = h.handle(str(info[0]))
+                all_info[key] = self.clean_text(date_text).replace(
+                    " ", "_").replace(":", "-").replace(",", "")
             if key is "article_text":
+                article_text = ""
+                for paragraph in info:
+                    paragraph_text = h.handle(str(paragraph))
+                    article_text += self.clean_text(paragraph_text) + " "
+                article_text = ' '.join(article_text.split())
+                all_info[key] = article_text
+            if key is "tickers":
+                tickers = []
+                for ticker in info:
+                    ticker_text = self.clean_text(h.handle(str(ticker)))
+                    tickers.append(ticker_text)
+                all_info[key] = tickers
 
-        web_text = h2t.
-        return web_text
+        return all_info
 
-    def rule_popper(self, soup, parse_rules):
+    def clean_text(self, text):
+        return unidecode.unidecode(' '.join(
+            (text.replace("\n", " ").replace("*", " ").replace(
+             "\\", " ").replace("-", " ")).split()))
+
+    def rule_popper(self, soup, parse_rules, info):
         # Pops out the list of rules one at a time.
-        while len(parse_rules) > 0:
-            current_parse = parse_rules.pop(0)
-            tag_name, attribute = current_parse
-            soup = soup.find_all(tag_name, attribute)
-        return soup
-
-    def List_maker(self,
-                   parse_rules,
-                   soup_list,
-                   web_list):
-        # Parses the list of links in Motley Fool.
-
-        if(len(parse_rules) > 0):
-            # If there is more info to extract.
-            current_parse = parse_rules[depth]
-            tag_name, attribute = current_parse
-            for soup_element in soup_list:
-                new_soup = soup_element.find_all(tag_name, attribute)
-                self.List_maker(parse_rules[1:], new_soup, web_list)
+        if len(parse_rules) > 0:
+            assert isinstance(soup, list)
+            for soup_element in soup:
+                tag_name, attribute = parse_rules[0]
+                sub_soup = soup_element.find_all(tag_name, attribute)
+                self.rule_popper(sub_soup, parse_rules[1:], info)
         else:
-            for soup_element in soup_list:
-                web_list.append(soup_element['href'])
+            info += soup
 
-    # \todo(vrubies) finish article parser.
-    def Article_parser(self,
-                       parse_rules,
-                       soup_list,
-                       depth,
-                       article_text,
-                       article_tickers):
-        # Parses an article from the Motley Fool.
-        if(len(parse_rules) > 0):
-            # If there is more info to extract.
-            current_parse = parse_rules[depth]
-            tag_name, attribute = current_parse
-            for soup_element in soup_list:
-                self.Article_parser(parse_rules, new_soup, depth+1,
-                                    article_text, article_tickers)
-        else:
-            s = soup_list[0]
-            article_list.append(s['href'])
+    # def List_maker(self,
+    #                parse_rules,
+    #                soup_list,
+    #                web_list):
+    #     # Parses the list of links in Motley Fool.
 
-    def crawl(self,
-              depth=0,
-              verbose=False):
-        # Crawler: It will loop thorugh Motley Fool's
-        # articles and extract article text and tickers.
+    #     if(len(parse_rules) > 0):
+    #         # If there is more info to extract.
+    #         current_parse = parse_rules[depth]
+    #         tag_name, attribute = current_parse
+    #         for soup_element in soup_list:
+    #             new_soup = soup_element.find_all(tag_name, attribute)
+    #             self.List_maker(parse_rules[1:], new_soup, web_list)
+    #     else:
+    #         for soup_element in soup_list:
+    #             web_list.append(soup_element['href'])
 
-        parse_rules = [("div", {"class": "list-content"}),
-                       ("a",   {"href": True}),
-                       # ("div", {"class": "text"}),
-                       # ("h4",  {}),
-                       # ("a",   {})
-                       ]
-        article_rules = [("span", {"class": "article-content"}),
-                         ("p",    {}),
-                         ("a",    {})
-                         ]
+    # # \todo(vrubies) finish article parser.
+    # def Article_parser(self,
+    #                    parse_rules,
+    #                    soup_list,
+    #                    depth,
+    #                    article_text,
+    #                    article_tickers):
+    #     # Parses an article from the Motley Fool.
+    #     if(len(parse_rules) > 0):
+    #         # If there is more info to extract.
+    #         current_parse = parse_rules[depth]
+    #         tag_name, attribute = current_parse
+    #         for soup_element in soup_list:
+    #             self.Article_parser(parse_rules, new_soup, depth+1,
+    #                                 article_text, article_tickers)
+    #     else:
+    #         s = soup_list[0]
+    #         article_list.append(s['href'])
 
-        data = requests.get(self.initial_address).text
+    # def crawl(self,
+    #           depth=0,
+    #           verbose=False):
+    #     # Crawler: It will loop thorugh Motley Fool's
+    #     # articles and extract article text and tickers.
 
-        # For loop
-        soup_list = [BeautifulSoup(data, 'html.parser')]
-        web_list = []
+    #     parse_rules = [("div", {"class": "list-content"}),
+    #                    ("a",   {"href": True}),
+    #                    # ("div", {"class": "text"}),
+    #                    # ("h4",  {}),
+    #                    # ("a",   {})
+    #                    ]
+    #     article_rules = [("span", {"class": "article-content"}),
+    #                      ("p",    {}),
+    #                      ("a",    {})
+    #                      ]
 
-        for
+    #     data = requests.get(self.initial_address).text
 
-        self.List_maker(parse_rules, soup_list, web_list)
-        if(verbose):
-            for web in web_list:
-                print(web)
+    #     # For loop
+    #     soup_list = [BeautifulSoup(data, 'html.parser')]
+    #     web_list = []
 
-        article_list = []
-        for web in web_list:
-            current_web = self.website+web
-            article_data = requests.get(current_web).text
-            soup_list = [BeautifulSoup(article_data, 'html.parser')]
-            text = []
-            tickers = []
-            self.Article_parser(article_rules, soup_list, text, tickers)
+    #     for
+
+    #     self.List_maker(parse_rules, soup_list, web_list)
+    #     if(verbose):
+    #         for web in web_list:
+    #             print(web)
+
+    #     article_list = []
+    #     for web in web_list:
+    #         current_web = self.website+web
+    #         article_data = requests.get(current_web).text
+    #         soup_list = [BeautifulSoup(article_data, 'html.parser')]
+    #         text = []
+    #         tickers = []
+    #         self.Article_parser(article_rules, soup_list, text, tickers)

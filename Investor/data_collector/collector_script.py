@@ -1,8 +1,8 @@
-from data_collector_main import WebsiteDataCollector
+from fool_collector import FoolCollector
 
-collector = WebsiteDataCollector(
+collector = FoolCollector(
                 "Fool_collector",
                 "https://www.fool.com",
-                "https://www.fool.com/investing-news/?page=9999")
+                range(0, 10))
 
-collector.crawl()
+collector.crawl(verbose=True)
