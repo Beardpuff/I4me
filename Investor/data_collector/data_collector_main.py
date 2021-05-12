@@ -7,6 +7,7 @@ import json
 import time
 import datetime
 import os
+import numpy as np
 
 
 class WebsiteDataCollector():
@@ -43,15 +44,21 @@ class WebsiteDataCollector():
         current_depth = 0
 
         # Breath first (search) of websites.
+        parse_time = 0.0
+        parsed_articles = 0
         while len(self.crawl_list) > 0:
 
             (current_website, current_has_info,
                 current_depth) = self.crawl_list.pop(0)
 
-            if verbose:
-                print('\rCurrent size of crawl_list = {:d}. Visiting: {:s}'.format(
-                      len(self.crawl_list), current_website), end=" ")
+            if verbose and (parsed_articles > 0):
+                nlist_e = len(self.crawl_list)
+                avg_time = parse_time/parsed_articles
+                total_time = nlist_e * avg_time
+                print('\rETA={:f} s. Current size of crawl_list = {:d}. Avg_time = {:f}.'.format(
+                      total_time, nlist_e, avg_time), end=" ")
 
+            start_time = time.time()
             data = requests.get(current_website).text
             soup = BeautifulSoup(data, 'html.parser')
 
@@ -59,20 +66,23 @@ class WebsiteDataCollector():
                 # If website has information to be parsed extract data.
                 try:
                     info_dict = self.extract_text(soup)
+                    if len(info_dict["tickers"]) > 0:
+                        info_dict["website"] = current_website
+                        file_name = "-".join(info_dict["author_name"])
+                        file_name = "_".join(file_name.split()) + "_" + info_dict["date"]
+                        # with open("./articles/"+file_name+".json", "w") as outfile:
+                        #     json.dump(info_dict, outfile)
+                    parsed_articles += 1
+                    elapsed_time = (time.time() - start_time)
+                    parse_time += elapsed_time
                 except:
-                    continue
-                if len(info_dict["tickers"]) > 0:
-                    info_dict["website"] = current_website
-                    file_name = "-".join(info_dict["author_name"])
-                    file_name = "_".join(file_name.split()) + "_" + info_dict["date"]
-                    with open("./articles/"+file_name+".json", "w") as outfile:
-                        json.dump(info_dict, outfile)
+                    pass
             if current_depth < depth:
                 # If crawl_depth is less that max_depth, append new websites.
                 try:
                     self.crawl_list += self.extract_links(soup, current_depth)
                 except:
-                    continue
+                    pass
 
     def extract_text(self):
         # Parses text from a website.
