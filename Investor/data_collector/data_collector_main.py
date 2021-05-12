@@ -37,7 +37,8 @@ class WebsiteDataCollector():
     def crawl(self,
               depth=1,
               verbose=False):
-        os.makedirs("./articles", exist_ok=True)
+        self.article_root_dir = "./" + self.name + "_articles"
+        os.makedirs(self.article_root_dir, exist_ok=True)
         # Crawler function.
         self.crawl_list = [(address, self.initial_has_info, 0)
                            for address in self.initial_address]
@@ -71,12 +72,7 @@ class WebsiteDataCollector():
                     info_dict = self.extract_text(soup)
                     if len(info_dict["tickers"]) > 0:
                         info_dict["website"] = current_website
-                        file_name = "-".join(info_dict["author_name"])
-                        file_name = "_".join(
-                            file_name.split()) + "_" + info_dict["date"]
-                        with open("./articles/"+file_name+".json",
-                                  "w") as outfile:
-                            json.dump(info_dict, outfile)
+                        self.store_info(info_dict)
                 except:
                     pass
 
@@ -91,6 +87,17 @@ class WebsiteDataCollector():
             parse_passes += 1
             elapsed_time = (time.time() - start_time)
             parse_time += elapsed_time
+
+    def store_info(self, info_dict):
+        date_string = "_".join(info_dict["date"].split("_")[:3])
+        date_dir = self.article_root_dir + "/" + date_dir
+        os.makedirs(date_dir, exist_ok=True)
+        file_name = "-".join(info_dict["author_name"])
+        file_name = "_".join(
+            file_name.split()) + "_" + info_dict["date"]
+        # with open("./articles"+"/"+file_name+".json",
+        #           "w") as outfile:
+        #     json.dump(info_dict, outfile)
 
     def extract_text(self):
         # Parses text from a website.
