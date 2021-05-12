@@ -69,9 +69,11 @@ class WebsiteDataCollector():
                     if len(info_dict["tickers"]) > 0:
                         info_dict["website"] = current_website
                         file_name = "-".join(info_dict["author_name"])
-                        file_name = "_".join(file_name.split()) + "_" + info_dict["date"]
-                        # with open("./articles/"+file_name+".json", "w") as outfile:
-                        #     json.dump(info_dict, outfile)
+                        file_name = "_".join(
+                            file_name.split()) + "_" + info_dict["date"]
+                        with open("./articles/"+file_name+".json",
+                                  "w") as outfile:
+                            json.dump(info_dict, outfile)
                     parsed_articles += 1
                     elapsed_time = (time.time() - start_time)
                     parse_time += elapsed_time
