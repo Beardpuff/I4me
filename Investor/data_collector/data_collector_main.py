@@ -99,8 +99,12 @@ class WebsiteDataCollector():
             os.makedirs(author_dir, exist_ok=True)
 
             file_name = author_dir + "/" + "_".join(info_dict["tickers"]) + ".json"
+            print(file_name)
             if sym_link_flag:
-                os.symlink(src_file, file_name)
+                try:
+                    os.symlink(src_file, file_name)
+                except FileExistsError:
+                    pass
             else:
                 sym_link_flag = True
                 src_file = os.getcwd() + file_name[1:]
