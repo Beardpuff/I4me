@@ -50,7 +50,7 @@ class FoolCollector(WebsiteDataCollector):
                              ("p",    {})
                              ]}
 
-        self.month_dict = {"Jan":"01", "Feb":"02", "Mar":"03", "Apr":"04", 
+        self.month_dict = {"Jan":"01", "Feb":"02", "Mar":"03", "Apr":"04",
                            "May":"05", "Jun":"06", "Jul":"07", "Aug":"08",
                            "Sep":"09", "Oct":"10", "Nov":"11", "Dec":"12"}
 
@@ -120,15 +120,21 @@ class FoolCollector(WebsiteDataCollector):
         return all_info
 
     def clean_author(self, text):
-        new_text =  text.replace("and",",").replace("And",",").replace(
-                                 "CFP","").replace("CFA","").replace(
-                                 "PhD","").replace("CPA","")
+        new_text = text.replace("and", ",").replace("And", ",").replace(
+                                "CFP", "").replace("CFA", "").replace(
+                                "PhD", "").replace("CPA", "")
         new_text = self.clean_text(new_text)
-        new_text = new_text.replace(" ", "_")
-        new_text = new_text.replace(",_", ",")
-        new_text = new_text.replace("_,", ",")
-        if (new_text[-1]==","):
+        new_text = new_text.replace(" , ", ",")
+        new_text = new_text.replace(" ,", ",")
+        new_text = new_text.replace(", ", ",")
+        while ",," in new_text:
+            new_text = new_text.replace(",,", ",")
+        if new_text[-1] == ",":
             new_text = new_text[:-1]
+        new_text = new_text.replace(" ", "_")
+        # new_text = new_text.replace("_,_", "")
+        # new_text = new_text.replace(",_", ",")
+        # new_text = new_text.replace("_,", "")
         return new_text
 
     def clean_text(self, text):
