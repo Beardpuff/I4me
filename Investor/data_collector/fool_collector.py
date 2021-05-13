@@ -4,10 +4,12 @@
 from data_collector_main import WebsiteDataCollector
 
 from bs4 import BeautifulSoup
+from collections import OrderedDict
 import bs4
 import requests
 import html2text as h2t
 import unidecode
+import re
 
 # url = raw_input("Enter a website to extract the URL's from: ")
 # r  = requests.get("http://" +url)
@@ -19,13 +21,16 @@ import unidecode
 
 class FoolCollector(WebsiteDataCollector):
 
-    def __init__(self, name, website, range_idx):
-        initial_address = [
-            "https://www.fool.com/investing-news/?page={:d}".format(
+    def __init__(self, name, website, range_idx, initial_has_info=False, initial_address=None):
+        if initial_address is not None:
+            assert isinstance(initial_address, list)
+        else:
+            initial_address = [
+                "https://www.fool.com/investing-news/?page={:d}".format(
                 ii) for ii in range_idx]
         super(FoolCollector, self).__init__(name, website, initial_address)
 
-        self.initial_has_info = False
+        self.initial_has_info = initial_has_info
         self.parse_links_rules = {
             "links":        [("div", {"class": "list-content"}),
                              ("a",   {"href": True}),
@@ -44,6 +49,10 @@ class FoolCollector(WebsiteDataCollector):
             "article_text": [("span", {"class": "article-content"}),
                              ("p",    {})
                              ]}
+
+        self.month_dict = {"Jan":"01", "Feb":"02", "Mar":"03", "Apr":"04", 
+                           "May":"05", "Jun":"06", "Jul":"07", "Aug":"08",
+                           "Sep":"09", "Oct":"10", "Nov":"11", "Dec":"12"}
 
         super(FoolCollector, self).check_ready()
 
@@ -66,7 +75,7 @@ class FoolCollector(WebsiteDataCollector):
 
     def extract_text(self, soup):
         # Text extractor for Motley Fool.
-        all_info = {}
+        all_info = OrderedDict()
 
         h = h2t.HTML2Text()
         h.ignore_links = True
@@ -80,18 +89,19 @@ class FoolCollector(WebsiteDataCollector):
             if key is "author_name":
                 author_name = []
                 for name in info:
-                    name_text = self.clean_text(h.handle(str(name)))
+                    name_text = self.clean_author(h.handle(str(name)))
                     for single_author in name_text.split(","):
-                        single_author = single_author.replace(
-                            "and ", "").replace(" and", "").replace(
-                            " and ", "")
-                        author_name.append(self.clean_text(
-                            single_author).replace(" ", "_"))
+                        author_name.append(single_author)
                 all_info[key] = author_name
             if key is "date":
                 date_text = h.handle(str(info[0]))
-                all_info[key] = self.clean_text(date_text).replace(
+                date_text = self.clean_text(date_text).replace(
                     " ", "_").replace(":", "-").replace(",", "")
+                date_elements = date_text.split("_")[:3]
+                assert date_elements[0] in self.month_dict.keys()
+                date_elements[0] = self.month_dict[date_elements[0]]
+                date_elements.insert(0, date_elements.pop())
+                all_info[key] = "_".join(date_elements)
             if key is "article_text":
                 article_text = ""
                 for paragraph in info:
@@ -103,10 +113,23 @@ class FoolCollector(WebsiteDataCollector):
                 tickers = []
                 for ticker in info:
                     ticker_text = self.clean_text(h.handle(str(ticker)))
+                    ticker_text = ":".join([re.sub(r'\W+', '', tt) for tt in ticker_text.split(":")])
                     tickers.append(ticker_text)
                 all_info[key] = tickers
 
         return all_info
+
+    def clean_author(self, text):
+        new_text =  text.replace("and",",").replace("And",",").replace(
+                                 "CFP","").replace("CFA","").replace(
+                                 "PhD","").replace("CPA","")
+        new_text = self.clean_text(new_text)
+        new_text = new_text.replace(" ", "_")
+        new_text = new_text.replace(",_", ",")
+        new_text = new_text.replace("_,", ",")
+        if (new_text[-1]==","):
+            new_text = new_text[:-1]
+        return new_text
 
     def clean_text(self, text):
         return unidecode.unidecode(' '.join(

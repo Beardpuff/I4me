@@ -8,6 +8,7 @@ import time
 import datetime
 import os
 import numpy as np
+from collections import OrderedDict
 
 
 class WebsiteDataCollector():
@@ -43,14 +44,13 @@ class WebsiteDataCollector():
         self.crawl_list = [(address, self.initial_has_info, 0)
                            for address in self.initial_address]
         current_depth = 0
-
         # Breath first (search) of websites.
         parse_time = 0.0
         parse_passes = 0
         while len(self.crawl_list) > 0:
             start_time = time.time()
 
-            (current_website, current_has_info,
+            (self.current_website, current_has_info,
                 current_depth) = self.crawl_list.pop(0)
 
             nlist_e = len(self.crawl_list)
@@ -63,18 +63,18 @@ class WebsiteDataCollector():
                 print('\rETA={:f} s. Current size of crawl_list = {:d}.'.format(
                       total_time, nlist_e, avg_time), end=" ")
 
-            data = requests.get(current_website).text
+            data = requests.get(self.current_website).text
             soup = BeautifulSoup(data, 'html.parser')
 
             if current_has_info:
                 # If website has information to be parsed extract data.
-                try:
-                    info_dict = self.extract_text(soup)
-                    if len(info_dict["tickers"]) > 0:
-                        info_dict["website"] = current_website
-                        self.store_info(info_dict)
-                except:
-                    pass
+                # try:
+                info_dict = self.extract_text(soup)
+                if len(info_dict["tickers"]) > 0:
+                    info_dict["website"] = self.current_website
+                    self.store_info(info_dict)
+                # except:
+                #     pass
 
             if current_depth < depth:
                 # If crawl_depth is less that max_depth, append new websites.
@@ -89,15 +89,23 @@ class WebsiteDataCollector():
             parse_time += elapsed_time
 
     def store_info(self, info_dict):
-        date_string = "_".join(info_dict["date"].split("_")[:3])
-        date_dir = self.article_root_dir + "/" + date_dir
+        date_dir = self.article_root_dir + "/" + info_dict["date"]
         os.makedirs(date_dir, exist_ok=True)
-        file_name = "-".join(info_dict["author_name"])
-        file_name = "_".join(
-            file_name.split()) + "_" + info_dict["date"]
-        # with open("./articles"+"/"+file_name+".json",
-        #           "w") as outfile:
-        #     json.dump(info_dict, outfile)
+
+        sym_link_flag = False
+        src_file = ""
+        for author_name in info_dict["author_name"]:
+            author_dir = date_dir + "/" + author_name
+            os.makedirs(author_dir, exist_ok=True)
+
+            file_name = author_dir + "/" + "_".join(info_dict["tickers"]) + ".json"
+            if sym_link_flag:
+                os.symlink(src_file, file_name)
+            else:
+                sym_link_flag = True
+                src_file = os.getcwd() + file_name[1:]
+                with open(file_name, "w") as outfile:
+                    json.dump(info_dict, outfile, sort_keys=True)
 
     def extract_text(self):
         # Parses text from a website.
