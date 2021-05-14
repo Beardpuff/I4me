@@ -11,6 +11,7 @@ import requests
 import html2text as h2t
 import unidecode
 import re
+import traceback, pdb, sys
 
 # url = raw_input("Enter a website to extract the URL's from: ")
 # r  = requests.get("http://" +url)
@@ -80,7 +81,7 @@ class FoolCollector(WebsiteDataCollector):
         all_info = OrderedDict()
         ignore = False
 
-        h = h2t.HTML2Text()
+        h = h2t.HTML2Text() # Move to constructor
         h.ignore_links = True
         h.ignore_images = True
 
@@ -88,46 +89,54 @@ class FoolCollector(WebsiteDataCollector):
         for key in parse_rules:
             info = []
             self.rule_popper([soup], parse_rules[key], info)
-
-            if key is "author_name":
-                author_name = []
-                for name in info:
-                    name_text = self.clean_author(h.handle(str(name)))
-                    for single_author in name_text.split(","):
-                        author_name.append(single_author)
-                all_info[key] = author_name
-            if key is "date":
-                date_text = h.handle(str(info[-1]))
-                date_text = self.clean_text(date_text)
-                if date_text.split(" ")[0] not in self.month_dict.keys():
-                    date_text = " ".join(date_text.split(" ")[1:])
-                date_text = date_text.replace(
-                    " ", "_").replace(":", "-").replace(",", "")
-                date_elements = date_text.split("_")[:3]
-                assert date_elements[0] in self.month_dict.keys()
-                date_elements[0] = self.month_dict[date_elements[0]]
-                date_elements.insert(0, date_elements.pop())
-                all_info[key] = "_".join(date_elements)
-            if key is "article_text":
-                article_text = ""
-                for paragraph in info:
-                    paragraph_text = h.handle(str(paragraph))
-                    article_text += self.clean_text(paragraph_text) + " "
-                article_text = ' '.join(article_text.split())
-                all_info[key] = article_text
-                ignore = not np.any([
-                    (market in article_text) for market in self.markets])
-            if key is "tickers":
-                tickers = []
-                for ticker in info:
-                    ticker_text = self.clean_text(h.handle(str(ticker)))
-                    ticker_text = ":".join([re.sub(r'\W+', '', tt) for tt in ticker_text.split(":")])
-                    tickers.append(ticker_text)
-                if len(tickers) == 0:
-                    tickers += self.get_text_tickers(all_info["article_text"])
-                all_info[key] = tickers
-                if not (len(all_info["tickers"]) > 0):
-                    ignore = True
+            try:
+                if key is "author_name":
+                    author_name = []
+                    for name in info:
+                        name_text = self.clean_author(h.handle(str(name)))
+                        for single_author in name_text.split(","):
+                            author_name.append(single_author)
+                    all_info[key] = author_name
+                if key is "date":
+                    if len(info) == 0:
+                        ignore = True
+                        break
+                    date_text = h.handle(str(info[-1]))
+                    date_text = self.clean_text(date_text)
+                    if date_text.split(" ")[0] not in self.month_dict.keys():
+                        date_text = " ".join(date_text.split(" ")[1:])
+                    date_text = date_text.replace(
+                        " ", "_").replace(":", "-").replace(",", "")
+                    date_elements = date_text.split("_")[:3]
+                    assert date_elements[0] in self.month_dict.keys()
+                    date_elements[0] = self.month_dict[date_elements[0]]
+                    date_elements.insert(0, date_elements.pop())
+                    all_info[key] = "_".join(date_elements)
+                if key is "article_text":
+                    article_text = ""
+                    for paragraph in info:
+                        paragraph_text = h.handle(str(paragraph))
+                        article_text += self.clean_text(paragraph_text) + " "
+                    article_text = ' '.join(article_text.split())
+                    all_info[key] = article_text
+                    ignore = not np.any([
+                        (market in article_text) for market in self.markets])
+                if key is "tickers":
+                    tickers = []
+                    for ticker in info:
+                        ticker_text = self.clean_text(h.handle(str(ticker)))
+                        ticker_text = ":".join([re.sub(r'\W+', '', tt) for tt in ticker_text.split(":")])
+                        tickers.append(ticker_text)
+                    if len(tickers) == 0:
+                        tickers += self.get_text_tickers(all_info["article_text"])
+                    all_info[key] = tickers
+                    if not (len(all_info["tickers"]) > 0):
+                        ignore = True
+            except Exception as e:
+                print("\nError handling " + key.upper() + " in website: ", self.current_website)
+                extype, value, tb = sys.exc_info()
+                traceback.print_exc()
+                pdb.post_mortem(tb)
 
             if ignore:
                 break
