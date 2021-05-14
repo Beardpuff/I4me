@@ -68,13 +68,13 @@ class WebsiteDataCollector():
 
             if current_has_info:
                 # If website has information to be parsed extract data.
-                try:
-                    info_dict = self.extract_text(soup)
-                    if len(info_dict["tickers"]) > 0:
-                        info_dict["website"] = self.current_website
-                        self.store_info(info_dict)
-                except:
-                    pass
+                # try:
+                info_dict, ignore = self.extract_text(soup)
+                if not ignore:
+                    info_dict["website"] = self.current_website
+                    self.store_info(info_dict)
+                # except AssertionError:
+                #     print("Error!")
 
             if current_depth < depth:
                 # If crawl_depth is less that max_depth, append new websites.
@@ -99,7 +99,6 @@ class WebsiteDataCollector():
             os.makedirs(author_dir, exist_ok=True)
 
             file_name = author_dir + "/" + "_".join(info_dict["tickers"]) + ".json"
-            print(file_name)
             if sym_link_flag:
                 try:
                     os.symlink(src_file, file_name)

@@ -4,6 +4,7 @@
 from data_collector_main import WebsiteDataCollector
 
 from bs4 import BeautifulSoup
+import numpy as np
 from collections import OrderedDict
 import bs4
 import requests
@@ -36,6 +37,9 @@ class FoolCollector(WebsiteDataCollector):
                              ("a",   {"href": True}),
                              ]}
         self.parse_text_rules = {
+            "article_text": [("span", {"class": "article-content"}),
+                             ("p",    {})
+                             ],
             "author_name":  [("div", {"class": "author-name"}),
                              ("a",    {})
                              ],
@@ -45,15 +49,13 @@ class FoolCollector(WebsiteDataCollector):
                              ("p",    {}),
                              ("span", {"class": "ticker"}),
                              ("a",    {})
-                             ],
-            "article_text": [("span", {"class": "article-content"}),
-                             ("p",    {})
                              ]}
 
         self.month_dict = {"Jan":"01", "Feb":"02", "Mar":"03", "Apr":"04",
                            "May":"05", "Jun":"06", "Jul":"07", "Aug":"08",
                            "Sep":"09", "Oct":"10", "Nov":"11", "Dec":"12"}
-
+        self.markets = ["NYSE:", "NASDAQ:", "OTC:", "CRYPTO:",
+                        "NASDAQINDEX:", "DJINDICES:"]
         super(FoolCollector, self).check_ready()
 
     def extract_links(self, soup, depth):
@@ -76,6 +78,7 @@ class FoolCollector(WebsiteDataCollector):
     def extract_text(self, soup):
         # Text extractor for Motley Fool.
         all_info = OrderedDict()
+        ignore = False
 
         h = h2t.HTML2Text()
         h.ignore_links = True
@@ -94,8 +97,11 @@ class FoolCollector(WebsiteDataCollector):
                         author_name.append(single_author)
                 all_info[key] = author_name
             if key is "date":
-                date_text = h.handle(str(info[0]))
-                date_text = self.clean_text(date_text).replace(
+                date_text = h.handle(str(info[-1]))
+                date_text = self.clean_text(date_text)
+                if date_text.split(" ")[0] not in self.month_dict.keys():
+                    date_text = " ".join(date_text.split(" ")[1:])
+                date_text = date_text.replace(
                     " ", "_").replace(":", "-").replace(",", "")
                 date_elements = date_text.split("_")[:3]
                 assert date_elements[0] in self.month_dict.keys()
@@ -109,20 +115,32 @@ class FoolCollector(WebsiteDataCollector):
                     article_text += self.clean_text(paragraph_text) + " "
                 article_text = ' '.join(article_text.split())
                 all_info[key] = article_text
+                ignore = not np.any([
+                    (market in article_text) for market in self.markets])
             if key is "tickers":
                 tickers = []
                 for ticker in info:
                     ticker_text = self.clean_text(h.handle(str(ticker)))
                     ticker_text = ":".join([re.sub(r'\W+', '', tt) for tt in ticker_text.split(":")])
                     tickers.append(ticker_text)
+                if len(tickers) == 0:
+                    tickers += self.get_text_tickers(all_info["article_text"])
                 all_info[key] = tickers
+                if not (len(all_info["tickers"]) > 0):
+                    ignore = True
 
-        return all_info
+            if ignore:
+                break
+
+        return all_info, ignore
 
     def clean_author(self, text):
-        new_text = text.replace("and", ",").replace("And", ",").replace(
-                                "CFP", "").replace("CFA", "").replace(
-                                "PhD", "").replace("CPA", "")
+        new_text = text.replace(", and ", ",")
+        new_text = new_text.replace(" and ", ",")
+        new_text = new_text.replace(", And ", ",")
+        new_text = new_text.replace(" And ", ",")
+        new_text = new_text.replace("CFP", "").replace("CFA", "").replace(
+                                    "PhD", "").replace("CPA", "")
         new_text = self.clean_text(new_text)
         new_text = new_text.replace(" , ", ",")
         new_text = new_text.replace(" ,", ",")
@@ -141,6 +159,24 @@ class FoolCollector(WebsiteDataCollector):
         return unidecode.unidecode(' '.join(
             (text.replace("\n", " ").replace("*", " ").replace(
              "\\", " ").replace("-", " ")).split()))
+
+    def get_text_tickers(self, text):
+        tickers = []
+        for market in self.markets:
+            if market in text:
+                self.get_ticker(text, market, tickers)
+        return tickers
+
+    def get_ticker(self, text, market, tickers):
+        divide_text = text.split(market)
+        divide_text.pop(0)
+        for substring in divide_text:
+            if not substring[0].isalnum():
+                substring = substring[1:]
+            limit = re.search(r'\W+', substring).start()
+            ticker_string = market + substring[0:limit]
+            if ticker_string not in tickers:
+                tickers.append(ticker_string)
 
     def rule_popper(self, soup, parse_rules, info):
         # Pops out the list of rules one at a time.
