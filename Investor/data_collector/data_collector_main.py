@@ -53,16 +53,6 @@ class WebsiteDataCollector():
             (self.current_website, current_has_info,
                 current_depth) = self.crawl_list.pop(0)
 
-            nlist_e = len(self.crawl_list)
-            avg_time = 0 if parse_passes is 0 else parse_time / parse_passes
-            total_time = nlist_e * avg_time
-            if verbose and (parse_passes > 0):
-                print('\rETA={:f} s. Current size of crawl_list = {:d}. Avg_time = {:f}.'.format(
-                      total_time, nlist_e, avg_time), end=" ")
-            elif verbose:
-                print('\rETA={:f} s. Current size of crawl_list = {:d}.'.format(
-                      total_time, nlist_e, avg_time), end=" ")
-
             data = requests.get(self.current_website).text
             soup = BeautifulSoup(data, 'html.parser')
 
@@ -84,9 +74,15 @@ class WebsiteDataCollector():
                     pass
 
             # Time stats.
+            nlist_e = len(self.crawl_list)
             parse_passes += 1
             elapsed_time = (time.time() - start_time)
             parse_time += elapsed_time
+            avg_time = parse_time / parse_passes
+            total_time = nlist_e * avg_time
+            if verbose:
+                print('\rETA={:f} s. Current size of crawl_list = {:d}. Avg_time = {:f}.'.format(
+                      total_time, nlist_e, avg_time), end=" ")
 
     def store_info(self, info_dict):
         date_dir = self.article_root_dir + "/" + info_dict["date"]

@@ -57,6 +57,9 @@ class FoolCollector(WebsiteDataCollector):
                            "Sep":"09", "Oct":"10", "Nov":"11", "Dec":"12"}
         self.markets = ["NYSE:", "NASDAQ:", "OTC:", "CRYPTO:",
                         "NASDAQINDEX:", "DJINDICES:"]
+        self.h = h2t.HTML2Text()
+        self.h.ignore_links = True
+        self.h.ignore_images = True
         super(FoolCollector, self).check_ready()
 
     def extract_links(self, soup, depth):
@@ -81,10 +84,6 @@ class FoolCollector(WebsiteDataCollector):
         all_info = OrderedDict()
         ignore = False
 
-        h = h2t.HTML2Text() # Move to constructor
-        h.ignore_links = True
-        h.ignore_images = True
-
         parse_rules = self.parse_text_rules.copy()
         for key in parse_rules:
             info = []
@@ -93,7 +92,7 @@ class FoolCollector(WebsiteDataCollector):
                 if key is "author_name":
                     author_name = []
                     for name in info:
-                        name_text = self.clean_author(h.handle(str(name)))
+                        name_text = self.clean_author(self.h.handle(str(name)))
                         for single_author in name_text.split(","):
                             author_name.append(single_author)
                     all_info[key] = author_name
@@ -101,7 +100,7 @@ class FoolCollector(WebsiteDataCollector):
                     if len(info) == 0:
                         ignore = True
                         break
-                    date_text = h.handle(str(info[-1]))
+                    date_text = self.h.handle(str(info[-1]))
                     date_text = self.clean_text(date_text)
                     if date_text.split(" ")[0] not in self.month_dict.keys():
                         date_text = " ".join(date_text.split(" ")[1:])
@@ -115,7 +114,7 @@ class FoolCollector(WebsiteDataCollector):
                 if key is "article_text":
                     article_text = ""
                     for paragraph in info:
-                        paragraph_text = h.handle(str(paragraph))
+                        paragraph_text = self.h.handle(str(paragraph))
                         article_text += self.clean_text(paragraph_text) + " "
                     article_text = ' '.join(article_text.split())
                     all_info[key] = article_text
@@ -124,7 +123,7 @@ class FoolCollector(WebsiteDataCollector):
                 if key is "tickers":
                     tickers = []
                     for ticker in info:
-                        ticker_text = self.clean_text(h.handle(str(ticker)))
+                        ticker_text = self.clean_text(self.h.handle(str(ticker)))
                         ticker_text = ":".join([re.sub(r'\W+', '', tt) for tt in ticker_text.split(":")])
                         tickers.append(ticker_text)
                     if len(tickers) == 0:
