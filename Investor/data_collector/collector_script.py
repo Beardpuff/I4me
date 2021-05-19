@@ -23,6 +23,6 @@ from fool_collector import FoolCollector
 collector = FoolCollector(
                 "fool_collector",
                 "https://www.fool.com",
-                range(24000, 23000, -1))
+                range(24000, 23900, -1))
 
 collector.crawl(verbose=True)

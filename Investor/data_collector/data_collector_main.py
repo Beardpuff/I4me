@@ -9,6 +9,8 @@ import datetime
 import os
 import numpy as np
 from collections import OrderedDict
+import multiprocessing
+from multiprocessing import Pool
 
 
 class WebsiteDataCollector():
@@ -30,6 +32,8 @@ class WebsiteDataCollector():
         self.current_has_info = None
         self.current_depth = None
 
+        self.num_cpus = multiprocessing.cpu_count()
+
     def check_ready(self):
         assert self.initial_has_info is not None
         assert self.parse_links_rules is not None
@@ -38,6 +42,7 @@ class WebsiteDataCollector():
     def crawl(self,
               depth=1,
               verbose=False):
+        self.depth = depth
         self.article_root_dir = "./" + self.name + "_articles"
         os.makedirs(self.article_root_dir, exist_ok=True)
         # Crawler function.
@@ -49,33 +54,42 @@ class WebsiteDataCollector():
         parse_passes = 0
         while len(self.crawl_list) > 0:
             start_time = time.time()
+            nlist_e = len(self.crawl_list)
 
-            (self.current_website, current_has_info,
-                current_depth) = self.crawl_list.pop(0)
+            args_input = []
+            for ii in range(min(self.num_cpus,nlist_e)):
+                args_input.append(self.crawl_list.pop(0))
+                parse_passes += 1             
+            with Pool(len(args_input)) as pool:
+                succ_fail = pool.starmap(self.extract_fcn, args_input)
 
-            data = requests.get(self.current_website).text
-            soup = BeautifulSoup(data, 'html.parser')
+            # Here ends the new stuff.
+            # (self.current_website, current_has_info,
+            #     current_depth) = self.crawl_list.pop(0)
 
-            if current_has_info:
-                # If website has information to be parsed extract data.
-                # try:
-                info_dict, ignore = self.extract_text(soup)
-                if not ignore:
-                    info_dict["website"] = self.current_website
-                    self.store_info(info_dict)
-                # except AssertionError:
-                #     print("Error!")
+            # data = requests.get(self.current_website).text
+            # soup = BeautifulSoup(data, 'html.parser')
 
-            if current_depth < depth:
-                # If crawl_depth is less that max_depth, append new websites.
-                try:
-                    self.crawl_list += self.extract_links(soup, current_depth)
-                except:
-                    pass
+            # if current_has_info:
+            #     # If website has information to be parsed extract data.
+            #     # try:
+            #     info_dict, ignore = self.extract_text(soup)
+            #     if not ignore:
+            #         info_dict["website"] = self.current_website
+            #         self.store_info(info_dict)
+            #     # except AssertionError:
+            #     #     print("Error!")
+
+            # if current_depth < depth:
+            #     # If crawl_depth is less that max_depth, append new websites.
+            #     try:
+            #         self.crawl_list += self.extract_links(soup, current_depth)
+            #     except:
+            #         pass
 
             # Time stats.
             nlist_e = len(self.crawl_list)
-            parse_passes += 1
+            # parse_passes += 1
             elapsed_time = (time.time() - start_time)
             parse_time += elapsed_time
             avg_time = parse_time / parse_passes
@@ -83,6 +97,27 @@ class WebsiteDataCollector():
             if verbose:
                 print('\rETA={:f} s. Current size of crawl_list = {:d}. Avg_time = {:f}.'.format(
                       total_time, nlist_e, avg_time), end=" ")
+
+    def extract_fcn(self, current_website, current_has_info, current_depth):
+        data = requests.get(current_website).text
+        soup = BeautifulSoup(data, 'html.parser')
+
+        if current_has_info:
+            # If website has information to be parsed extract data.
+            # try:
+            info_dict, ignore = self.extract_text(soup)
+            if not ignore:
+                info_dict["website"] = current_website
+                self.store_info(info_dict)
+            # except AssertionError:
+            #     print("Error!")
+
+        if current_depth < self.depth:
+            # If crawl_depth is less that max_depth, append new websites.
+            try:
+                self.crawl_list += self.extract_links(soup, current_depth)
+            except:
+                pass
 
     def store_info(self, info_dict):
         date_dir = self.article_root_dir + "/" + info_dict["date"]
