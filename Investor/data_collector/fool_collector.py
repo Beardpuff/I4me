@@ -33,24 +33,26 @@ class FoolCollector(WebsiteDataCollector):
         super(FoolCollector, self).__init__(name, website, initial_address)
 
         self.initial_has_info = initial_has_info
-        self.parse_links_rules = {
-            "links":        [("div", {"class": "list-content"}),
+        # IMPORTANT: Need to use OrderedDicts to avoid problems of info_all
+        # not containing appropriate info.
+        self.parse_links_rules = OrderedDict([
+            ("links",        [("div", {"class": "list-content"}),
                              ("a",   {"href": True}),
-                             ]}
-        self.parse_text_rules = {
-            "article_text": [("span", {"class": "article-content"}),
+                             ])])
+        self.parse_text_rules = OrderedDict([
+            ("article_text", [("span", {"class": "article-content"}),
                              ("p",    {})
-                             ],
-            "author_name":  [("div", {"class": "author-name"}),
+                             ]),
+            ("author_name",  [("div", {"class": "author-name"}),
                              ("a",    {})
-                             ],
-            "date":         [("div", {"class": "publication-date"})
-                             ],
-            "tickers":      [("span", {"class": "article-content"}),
+                             ]),
+            ("date",         [("div", {"class": "publication-date"})
+                             ]),
+            ("tickers",      [("span", {"class": "article-content"}),
                              ("p",    {}),
                              ("span", {"class": "ticker"}),
                              ("a",    {})
-                             ]}
+                             ])])
 
         self.month_dict = {"Jan":"01", "Feb":"02", "Mar":"03", "Apr":"04",
                            "May":"05", "Jun":"06", "Jul":"07", "Aug":"08",
@@ -70,8 +72,7 @@ class FoolCollector(WebsiteDataCollector):
         for key in parse_rules:
             info = []
             self.rule_popper([soup], parse_rules[key], info)
-
-            if key is "links":
+            if key == "links":
                 for soup_element in info:
                     next_website = self.website + soup_element['href']
                     has_info = True
@@ -89,14 +90,14 @@ class FoolCollector(WebsiteDataCollector):
             info = []
             self.rule_popper([soup], parse_rules[key], info)
             try:
-                if key is "author_name":
+                if key == "author_name":
                     author_name = []
                     for name in info:
                         name_text = self.clean_author(self.h.handle(str(name)))
                         for single_author in name_text.split(","):
                             author_name.append(single_author)
                     all_info[key] = author_name
-                if key is "date":
+                if key == "date":
                     if len(info) == 0:
                         ignore = True
                         break
@@ -111,7 +112,7 @@ class FoolCollector(WebsiteDataCollector):
                     date_elements[0] = self.month_dict[date_elements[0]]
                     date_elements.insert(0, date_elements.pop())
                     all_info[key] = "_".join(date_elements)
-                if key is "article_text":
+                if key == "article_text":
                     article_text = ""
                     for paragraph in info:
                         paragraph_text = self.h.handle(str(paragraph))
@@ -120,7 +121,7 @@ class FoolCollector(WebsiteDataCollector):
                     all_info[key] = article_text
                     ignore = not np.any([
                         (market in article_text) for market in self.markets])
-                if key is "tickers":
+                if key == "tickers":
                     tickers = []
                     for ticker in info:
                         ticker_text = self.clean_text(self.h.handle(str(ticker)))

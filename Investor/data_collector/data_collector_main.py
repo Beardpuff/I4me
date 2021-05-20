@@ -61,7 +61,9 @@ class WebsiteDataCollector():
                 args_input.append(self.crawl_list.pop(0))
                 parse_passes += 1             
             with Pool(len(args_input)) as pool:
-                succ_fail = pool.starmap(self.extract_fcn, args_input)
+                extracted = pool.starmap(self.extract_fcn, args_input)
+                for ee in extracted:
+                    self.crawl_list += ee
 
             # Here ends the new stuff.
             # (self.current_website, current_has_info,
@@ -99,25 +101,35 @@ class WebsiteDataCollector():
                       total_time, nlist_e, avg_time), end=" ")
 
     def extract_fcn(self, current_website, current_has_info, current_depth):
+        self.current_website = current_website
         data = requests.get(current_website).text
         soup = BeautifulSoup(data, 'html.parser')
 
+        # print("Part I - {:d}".format(os.getpid()), " and ", current_has_info)
         if current_has_info:
             # If website has information to be parsed extract data.
             # try:
+            # print("Part II - {:d}".format(os.getpid()))
             info_dict, ignore = self.extract_text(soup)
             if not ignore:
+                # print("Part III - {:d}".format(os.getpid()))
                 info_dict["website"] = current_website
                 self.store_info(info_dict)
             # except AssertionError:
             #     print("Error!")
 
         if current_depth < self.depth:
+            # print("Part II-BIS - {:d}".format(os.getpid()))
             # If crawl_depth is less that max_depth, append new websites.
-            try:
-                self.crawl_list += self.extract_links(soup, current_depth)
-            except:
-                pass
+
+            # print("Part III-BIS - {:d}".format(os.getpid()))
+            # print(len(self.crawl_list))
+            return self.extract_links(soup, current_depth)
+            #self.crawl_list += extracted
+            # print(len(self.crawl_list))
+        return []
+
+
 
     def store_info(self, info_dict):
         date_dir = self.article_root_dir + "/" + info_dict["date"]
